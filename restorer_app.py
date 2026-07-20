@@ -21,7 +21,7 @@ st.markdown("""
         background-color: #0b0b10;
         color: #ffffff;
         font-family: 'Inter', sans-serif;
-        padding-top: 32px;
+        padding-top: 2rem !important;
     }
     
     .pixel-font {
@@ -550,7 +550,7 @@ st.markdown("""
 
 # === HERO SECTION ===
 st.markdown("""
-    <div style="max-width: 896px; margin: 32px auto 2rem auto; padding-top: 32px; text-align: left;">
+    <div style="max-width: 896px; margin: 2rem auto 2rem auto; padding-top: 2rem; text-align: left;">
         <div class="hero-title">PIXEL_RESTORE_V1.0</div>
         <div class="hero-underline"></div>
         <div class="hero-description">Интеллектуальная коррекция сетки и очистка палитры пиксель-арта.</div>
@@ -602,11 +602,49 @@ if uploaded_file:
 
     col1, col2 = st.columns(2, gap="large")
 
-    # --- Левая колонка: Исходное изображение ---
+   # --- Левая колонка: Исходное изображение + ПАЛИТРА ---
     with col1:
         st.markdown("<p style='font-family: \"Press Start 2P\", monospace; font-size: 12px; color: #888;'>ИСХОДНОЕ</p>", unsafe_allow_html=True)
         st.image(original, use_container_width=True)
-
+        
+        # Блок ПАЛИТРЫ
+        if 'restored' in st.session_state:
+            st.markdown("### ПАЛИТРА")
+            from pixel_core import get_palette_stats
+            
+            palette = get_palette_stats(st.session_state['restored'])
+            table_rows = ""
+            for item in palette:
+                color_box = (
+                    f'<span style="display:inline-block; width:24px; height:24px; background:{item["hex"]}; '
+                    'border:1px solid #fff; vertical-align:middle; margin-right:8px;"></span>'
+                )
+                table_rows += f"""
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #2e2e3a;">{item['id']}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #2e2e3a;">{color_box}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #2e2e3a;">{item['hex']}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #2e2e3a;">{item['rgb']}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #2e2e3a;">{item['percentage']:.1f}%</td>
+                </tr>
+                """
+            st.write(
+                f"""
+                <table style="width:100%; border-collapse: collapse; font-size: 12px; color: white; margin-top: 12px;">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left; padding: 8px; border: 1px solid #2e2e3a;">№</th>
+                            <th style="text-align:left; padding: 8px; border: 1px solid #2e2e3a;">Миниатюра</th>
+                            <th style="text-align:left; padding: 8px; border: 1px solid #2e2e3a;">HEX</th>
+                            <th style="text-align:left; padding: 8px; border: 1px solid #2e2e3a;">RGB</th>
+                            <th style="text-align:left; padding: 8px; border: 1px solid #2e2e3a;">Покрытие</th>
+                        </tr>
+                    </thead>
+                    <tbody>{table_rows}</tbody>
+                </table>
+                """,
+                unsafe_allow_html=True,
+            )
     # --- Правая колонка: Результат ---
     with col2:
         st.markdown("<p style='font-family: \"Press Start 2P\", monospace; font-size: 12px; color: #888;'>РЕЗУЛЬТАТ</p>", unsafe_allow_html=True)
@@ -668,7 +706,6 @@ if uploaded_file:
                     st.session_state['initial_colors'] = initial_colors
                     st.session_state['result_scale'] = max(6, min(16, 800 // max(w, h)))
                     st.rerun()
-
 else:
     # Ничего не выводим, если файл не загружен – чистая hero-секция
     pass

@@ -331,3 +331,60 @@ def optimize_palette(img_rgb, target_w, target_h, max_k=32):
         initial_max,
         initial_colors,
     )
+def get_palette_stats(img_rgb):
+    """
+    Анализирует изображение и возвращает список словарей со статистикой цветов,
+    отсортированный по убыванию частоты.
+    """
+    img_np = np.array(img_rgb)
+    w, h, _ = img_np.shape
+    total_pixels = w * h
+    
+    # Получаем уникальные цвета и их количество
+    pixels = img_np.reshape(-1, 3)
+    colors, counts = np.unique(pixels, axis=0, return_counts=True)
+    
+    # Сортируем по убыванию количества
+    sort_indices = np.argsort(counts)[::-1]
+    sorted_colors = colors[sort_indices]
+    sorted_counts = counts[sort_indices]
+    
+    palette_data = []
+    for i, (color, count) in enumerate(zip(sorted_colors, sorted_counts)):
+        hex_code = '#{:02x}{:02x}{:02x}'.format(color[0], color[1], color[2])
+        palette_data.append({
+            "id": i + 1,
+            "rgb": tuple(color),
+            "hex": hex_code,
+            "percentage": (count / total_pixels) * 100
+        })
+    
+    return palette_data
+def get_palette_stats(img_rgb):
+    """
+    Анализирует изображение и возвращает список словарей со статистикой цветов,
+    отсортированный по убыванию частоты.
+    """
+    img_np = np.array(img_rgb)
+    total_pixels = img_np.shape[0] * img_np.shape[1]
+    
+    # Извлекаем все пиксели и считаем уникальные цвета
+    pixels = img_np.reshape(-1, 3)
+    colors, counts = np.unique(pixels, axis=0, return_counts=True)
+    
+    # Сортируем по убыванию количества (от самых частых к редким)
+    sort_indices = np.argsort(counts)[::-1]
+    sorted_colors = colors[sort_indices]
+    sorted_counts = counts[sort_indices]
+    
+    palette_data = []
+    for i, (color, count) in enumerate(zip(sorted_colors, sorted_counts)):
+        hex_code = '#{:02x}{:02x}{:02x}'.format(color[0], color[1], color[2])
+        palette_data.append({
+            "id": i + 1,
+            "rgb": tuple(color),
+            "hex": hex_code,
+            "percentage": (count / total_pixels) * 100
+        })
+    
+    return palette_data
