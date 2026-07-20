@@ -7,7 +7,6 @@ from sklearn.cluster import KMeans
 def _smooth_profile(profile, window=3):
     return np.convolve(profile.astype(float), np.ones(window, dtype=float) / window, mode="same")
 
-
 def _find_edge_peaks(profile):
     profile_s = _smooth_profile(profile, window=3)
     if np.max(profile_s) <= 0:
@@ -16,7 +15,6 @@ def _find_edge_peaks(profile):
     prom = max(np.max(profile_s) * 0.15, np.std(profile_s) * 0.3, 1e-3)
     peaks, _ = find_peaks(profile_s, prominence=prom, distance=2)
     return peaks
-
 
 def _step_from_peak_positions(peaks):
     if len(peaks) < 2:
@@ -386,5 +384,5 @@ def get_palette_stats(img_rgb):
             "hex": hex_code,
             "percentage": (count / total_pixels) * 100
         })
-    
+
     return palette_data

@@ -1,177 +1,177 @@
 import numpy as np
 from PIL import Image
+from scipy.signal import correlate, find_peaks
 from sklearn.cluster import KMeans
-from scipy.signal import correlate
 import streamlit as st
+from io import BytesIO
 
-def analyze_grid_step(img_gray):
-    """Аналитическое определение размера сетки по градиентам яркости."""
-    arr = np.array(img_gray, dtype=float)
-    
-    # Вычисляем градиент яркости по строкам и столбцам
-    grad_x = np.abs(np.diff(arr, axis=1))
-    grad_y = np.abs(np.diff(arr, axis=0))
-    
-    profile_x = np.mean(grad_x, axis=0)
-    profile_y = np.mean(grad_y, axis=1)
-    
-    def find_period(profile):
-        if len(profile) < 4:
-            return 1
-        corr = correlate(profile - np.mean(profile), profile - np.mean(profile), mode='full')
-        corr = corr[len(corr)//2:]
-        if len(corr) < 2:
-            return 1
-        peaks = []
-        for i in range(1, len(corr) - 1):
-            if corr[i] > corr[i-1] and corr[i] > corr[i+1]:
-                peaks.append(i)
-        return peaks[0] if peaks else 1
+st.set_page_config(
+    page_title="Pixel Art to Cross-Stitch Converter", layout="centered"
+)
 
-    step_x = find_period(profile_x)
-    step_y = find_period(profile_y)
-    
-    estimated_step = int(round((step_x + step_y) / 2))
-    return max(1, estimated_step)
+st.title("Востановление Pixel Art")
+st.write(
+    "Загрузи пиксель-арт, чтобы автоматически определить сетку, очистить палитру и получить точную схему."
+)
 
-def snap_to_convenient(val):
-    """Корректировка к удобному числу, если оно близко."""
-    convenient = [8, 16, 32, 64, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 150]
-    for c in convenient:
-        if abs(val - c) / c <= 0.15:
-            return c
-    return val
+uploaded_file = st.file_uploader(
+    "Выберите изображение...", type=["png", "jpg", "jpeg"]
+)
 
-def process_pixel_art(img_orig):
-    W, H = img_orig.size
-    img_gray = img_orig.convert("L")
-    
-    # 1. Анализ шага сетки
-    step = analyze_grid_step(img_gray)
-    raw_grid_w = round(W / step)
-    raw_grid_h = round(H / step)
-    
-    grid_w = snap_to_convenient(raw_grid_w)
-    grid_h = snap_to_convenient(raw_grid_h)
-    
-    # 2. Масштабирование (усреднение блоков)
-    img_small = img_orig.resize((grid_w, grid_h), Image.Resampling.BOX)
-    
-    # 3. Очистка палитры (K-Means с защитой от потери мелких деталей)
-    pixels = np.array(img_small).reshape(-1, 3)
-    
-    inertias = []
-    max_k_range = min(33, len(np.unique(pixels, axis=0)))
-    if max_k_range < 6:
-        max_k_range = max(2, len(np.unique(pixels, axis=0)))
-    k_range = range(6, max_k_range) if max_k_range > 6 else range(2, max_k_range)
-    
-    for k in k_range:
-        kmeans = KMeans(n_clusters=k, n_init=10, random_state=42).fit(pixels)
-        inertias.append(kmeans.inertia_)
-    
-    best_k = list(k_range)[0]
-    if len(inertias) > 2:
-        diffs = np.diff(inertias)
-        diffs_2 = np.diff(diffs)
-        if len(diffs_2) > 0:
-            best_k = list(k_range)[np.argmax(diffs_2) + 1]
-            
-    current_k = best_k
-    max_iter_k = 64
-    mean_err, max_err = 0.0, 0.0
-    
-    while current_k <= max_iter_k:
-        kmeans = KMeans(n_clusters=current_k, n_init=15, random_state=42).fit(pixels)
-        labels = kmeans.labels_
-        centers = kmeans.cluster_centers_
-        
-        assigned_centers = centers[labels]
-        distances = np.linalg.norm(pixels - assigned_centers, axis=1)
-        
-        mean_err = np.mean(distances)
-        max_err = np.max(distances)
-        
-        if max_err > 22.0 and current_k + 4 <= max_iter_k:
-            current_k += 4
-        else:
-            break
-            
-    quantized_arr = assigned_centers.clip(0, 255).astype(np.uint8).reshape((grid_h, grid_w, 3))
-    img_quantized = Image.fromarray(quantized_arr, "RGB")
-    
-    # 4. Создание превью
-    scale_factor = 8
-    img_preview = img_quantized.resize((grid_w * scale_factor, grid_h * scale_factor), Image.Resampling.NEAREST)
-    
-    info = {
-        "step": step,
-        "grid_w": grid_w,
-        "grid_h": grid_h,
-        "elbow_k": best_k,
-        "final_k": current_k,
-        "mean_err": mean_err,
-        "max_err": max_err
-    }
-    
-    return img_quantized, img_preview, info
 
-# --- INTERFACE (Streamlit) ---
-st.title("🧵 Восстановление Pixel Art для схем вышивки")
-st.write("Загрузите размытое изображение пиксель-арта, и алгоритм автоматически вернет ему исходную четкость и палитру.")
+def detect_grid_size(img_gray):
+  """Аналитическое определение размера сетки через градиенты и автокорреляцию."""
+  img_np = np.array(img_gray, dtype=float)
 
-uploaded_file = st.file_uploader("Выберите файл изображения (PNG, JPG)", type=["png", "jpg", "jpeg"])
+  # Считаем разницу соседних пикселей (градиент) по строкам и столбцам
+  grad_x = np.abs(np.diff(img_np, axis=1))
+  grad_y = np.abs(np.diff(img_np, axis=0))
+
+  # Проекции градиентов на оси (суммируем по строкам/столбцам)
+  profile_x = np.sum(grad_x, axis=0)
+  profile_y = np.sum(grad_y, axis=1)
+
+
+  def find_period(profile):
+    if len(profile) < 4:
+      return 1
+    # Автокорреляция профиля для поиска повторяющегося шага сетки
+    corr = correlate(profile - np.mean(profile), profile - np.mean(profile), mode='full')
+    # Оставляем только правую часть (положительные лаги)
+    corr = corr[len(corr) // 2 :]
+
+    if len(corr) < 3:
+      return 1
+
+    # Ищем пики автокорреляции (игнорируем нулевой лаг)
+    peaks, _ = find_peaks(corr, distance=2)
+    if len(peaks) > 0:
+      return int(peaks[0])
+
+    return max(1, int(np.argmax(corr[1:]) + 1))
+
+
+  step_x = find_period(profile_x)
+  step_y = find_period(profile_y)
+
+  # Усредняем шаг по осям и приводим к разумному целому
+  estimated_step = int(round((step_x + step_y) / 2))
+  estimated_step = max(1, estimated_step)
+
+  orig_w, orig_h = img_gray.size
+
+  # Размеры сетки
+  grid_w = max(1, round(orig_w / estimated_step))
+  grid_h = max(1, round(orig_h / estimated_step))
+
+  return estimated_step, grid_w, grid_h
+
+
+def optimize_palette_with_guard(img_rgb, target_w, target_h, max_k=32):
+  """Даунскейл методом box-фильтра и подбор K-Means палитры с защитой от потери мелких деталей."""
+  img_small = img_rgb.resize((target_w, target_h), Image.Resampling.BOX)
+  pixels = np.array(img_small, dtype=float).reshape(-1, 3)
+
+  best_labels = None
+  best_centers = None
+  chosen_k = 6
+  mean_err = 0.0
+  max_err = 0.0
+
+  unique_colors_count = len(np.unique(pixels, axis=0))
+  limit_k = min(max_k + 1, unique_colors_count + 1)
+
+  for k in range(6, max(7, limit_k), 2):
+    kmeans = KMeans(n_clusters=k, n_init=15, random_state=42)
+    labels = kmeans.fit_predict(pixels)
+    centers = kmeans.cluster_centers_
+
+    quantized_pixels = centers[labels]
+    errors = np.linalg.norm(pixels - quantized_pixels, axis=1)
+
+    max_err = np.max(errors)
+    mean_err = np.mean(errors)
+
+    chosen_k = k
+    best_labels = labels
+    best_centers = centers
+
+    if mean_err < 3.5 and max_err < 22:
+      break
+
+  final_pixels_rgb = np.clip(best_centers[best_labels], 0, 255).astype(np.uint8)
+  result_small_np = final_pixels_rgb.reshape((target_h, target_w, 3))
+  result_small_img = Image.fromarray(result_small_np, mode="RGB")
+
+  return result_small_img, chosen_k, mean_err, max_err
+
 
 if uploaded_file is not None:
-    img_orig = Image.open(uploaded_file).convert("RGB")
-    
-    st.subheader("Исходное изображение")
-    st.image(img_orig, caption="Загруженный файл", use_container_width=True)
-    
-    if st.button("Создать схему"):
-        with st.spinner("Анализируем сетку и очищаем палитру..."):
-            img_quantized, img_preview, info = process_pixel_art(img_orig)
-            
-        st.success("Готово!")
-        
-        # Вывод аналитики
-        st.info(
-            f"**Результаты анализа:**\n"
-            f"- Найденный шаг сетки: **{info['step']} px**\n"
-            f"- Итоговый размер схемы: **{info['grid_w']} x {info['grid_h']} крестиков**\n"
-            f"- Базовый 'локоть' палитры (k): **{info['elbow_k']}**\n"
-            f"- Итоговое число цветов после проверки деталей: **{info['final_k']}**\n"
-            f"- Ошибка квантования: средняя = **{info['mean_err']:.2f}**, максимальная = **{info['max_err']:.2f}**"
+  original_image = Image.open(uploaded_file).convert("RGB")
+  st.image(
+      original_image,
+      caption="Исходное загруженное изображение",
+      use_container_width=True,
+  )
+
+  if st.button("🚀 Запустить аналитический анализ и конвертацию"):
+    with st.spinner("Анализируем сетку и подбираем палитру..."):
+      gray_image = original_image.convert("L")
+      step, grid_w, grid_h = detect_grid_size(gray_image)
+
+      st.success(
+          f"✅ **Анализ завершен:** найден шаг сетки **{step} px**, размер"
+          f" сетки: **{grid_w} × {grid_h} крестиков**."
+      )
+
+      palette_img, final_k, mean_err, max_err = optimize_palette_with_guard(
+          original_image, grid_w, grid_h
+      )
+
+      st.info(
+          f"🎨 **Палитра:** подобрано цветов ($k$): **{final_k}**. Средняя"
+          f" ошибка квантования: **{mean_err:.2f}**, максимальная:"
+          f" **{max_err:.2f}**."
+      )
+
+      scale_preview = max(6, min(8, 1000 // max(grid_w, grid_h)))
+      preview_img = palette_img.resize(
+          (grid_w * scale_preview, grid_h * scale_preview),
+          Image.Resampling.NEAREST,
+      )
+
+      col1, col2 = st.columns(2)
+
+      with col1:
+        st.image(
+            palette_img,
+            caption=f"Схема в исходном размере ({grid_w}x{grid_h})",
+            use_container_width=True,
         )
-        
-        st.subheader("Результат обработки (увеличенная превьюшка)")
-        st.image(img_preview, caption=f"Схема в разрешении сетки {info['grid_w']}x{info['grid_h']} (увеличено для просмотра)", use_container_width=True)
-        
-        # Подготовка файлов к скачиванию в байтовый формат
-        import io
-        
-        # Файл 1: Точный размер сетки
-        buf_small = io.BytesIO()
-        img_quantized.save(buf_small, format="PNG")
+        buf_small = BytesIO()
+        palette_img.save(buf_small, format="PNG")
         byte_small = buf_small.getvalue()
-        
-        # Файл 2: Увеличенное превью
-        buf_large = io.BytesIO()
-        img_preview.save(buf_large, format="PNG")
+
+        st.download_button(
+            label="📥 Скачать схему (оригинальный размер)",
+            data=byte_small,
+            file_name="cross_stitch_grid.png",
+            mime="image/png",
+        )
+
+      with col2:
+        st.image(
+            preview_img,
+            caption=f"Превью для просмотра (×{scale_preview})",
+            use_container_width=True,
+        )
+        buf_large = BytesIO()
+        preview_img.save(buf_large, format="PNG")
         byte_large = buf_large.getvalue()
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(
-                label="⬇️ Скачать схему (оригинальный размер)",
-                data=byte_small,
-                file_name="pixel_art_grid.png",
-                mime="image/png"
-            )
-        with col2:
-            st.download_button(
-                label="⬇️ Скачать превью (для просмотра)",
-                data=byte_large,
-                file_name="pixel_art_preview.png",
-                mime="image/png"
-            )
+
+        st.download_button(
+            label="📥 Скачать превью (для просмотра)",
+            data=byte_large,
+            file_name="cross_stitch_preview.png",
+            mime="image/png",
+        )
