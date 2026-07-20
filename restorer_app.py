@@ -624,7 +624,6 @@ if uploaded_file:
                     <td style="padding: 6px 8px; border: 1px solid #2e2e3a;">{item['id']}</td>
                     <td style="padding: 6px 8px; border: 1px solid #2e2e3a;">{color_box}</td>
                     <td style="padding: 6px 8px; border: 1px solid #2e2e3a;">{item['hex']}</td>
-                    <td style="padding: 6px 8px; border: 1px solid #2e2e3a;">{item['rgb']}</td>
                     <td style="padding: 6px 8px; border: 1px solid #2e2e3a;">{item['percentage']:.1f}%</td>
                 </tr>
                 """
@@ -636,7 +635,6 @@ if uploaded_file:
                             <th style="text-align:left; padding: 8px; border: 1px solid #2e2e3a;">№</th>
                             <th style="text-align:left; padding: 8px; border: 1px solid #2e2e3a;">Миниатюра</th>
                             <th style="text-align:left; padding: 8px; border: 1px solid #2e2e3a;">HEX</th>
-                            <th style="text-align:left; padding: 8px; border: 1px solid #2e2e3a;">RGB</th>
                             <th style="text-align:left; padding: 8px; border: 1px solid #2e2e3a;">Покрытие</th>
                         </tr>
                     </thead>
