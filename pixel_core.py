@@ -1,6 +1,7 @@
 import numpy as np
 from PIL import Image
 from scipy.signal import correlate, find_peaks
+from scipy.ndimage import label
 from sklearn.cluster import KMeans
 
 def _smooth_profile(profile, window=3):
@@ -205,11 +206,14 @@ def detect_grid_size(img_gray):
     step_y = choose_step(edge_step_y, corr_step_y, spec_step_y, orig_h)
     step = max(1.0, (step_x + step_y) / 2.0)
 
-    grid_w = max(1, int(round(orig_w / step)))
-    grid_h = max(1, int(round(orig_h / step)))
+    # Use axis-specific step estimates when converting to grid counts.
+    # Previously both axes used the averaged `step`, which produced
+    # systematic errors for non-square pixels or asymmetric artifacts.
+    grid_w = max(1, int(round(orig_w / max(1e-9, step_x))))
+    grid_h = max(1, int(round(orig_h / max(1e-9, step_y))))
 
-    grid_w = choose_grid_count(grid_w, spec_count_x, orig_w, step)
-    grid_h = choose_grid_count(grid_h, spec_count_y, orig_h, step)
+    grid_w = choose_grid_count(grid_w, spec_count_x, orig_w, step_x)
+    grid_h = choose_grid_count(grid_h, spec_count_y, orig_h, step_y)
 
     grid_w = _round_to_nice_size(grid_w)
     grid_h = _round_to_nice_size(grid_h)
@@ -222,27 +226,16 @@ def detect_grid_size(img_gray):
 
 
 def _largest_connected_region(mask):
-    visited = np.zeros(mask.shape, dtype=bool)
-    best = 0
-    h, w = mask.shape
-    for y in range(h):
-        for x in range(w):
-            if not mask[y, x] or visited[y, x]:
-                continue
-            stack = [(y, x)]
-            visited[y, x] = True
-            size = 0
-            while stack:
-                cy, cx = stack.pop()
-                size += 1
-                for ny, nx in ((cy-1, cx), (cy+1, cx), (cy, cx-1), (cy, cx+1)):
-                    if 0 <= ny < h and 0 <= nx < w and mask[ny, nx] and not visited[ny, nx]:
-                        visited[ny, nx] = True
-                        stack.append((ny, nx))
-            best = max(best, size)
-            if best >= 6:
-                return best
-    return best
+    # Use scipy.ndimage.label for fast connected-component labelling.
+    # Returns the size (in pixels) of the largest connected True-region.
+    labeled, ncomponents = label(mask)
+    if ncomponents == 0:
+        return 0
+    counts = np.bincount(labeled.ravel())
+    if counts.size <= 1:
+        return 0
+    # Skip background count at index 0
+    return int(counts[1:].max())
 
 
 def _should_increase_k(errors, width, height):
@@ -327,4 +320,14 @@ def optimize_palette(img_rgb, target_w, target_h, max_k=32):
 
     final_quantized = np.clip(current_centers[current_labels], 0, 255).astype(np.uint8)
     result = Image.fromarray(final_quantized.reshape((target_h, target_w, 3)), mode="RGB")
-    return result, current_k, float(np.mean(current_errors)), float(np.max(current_errors)), elbow_k, initial_mean, initial_max
+    initial_colors = unique_colors
+    return (
+        result,
+        current_k,
+        float(np.mean(current_errors)),
+        float(np.max(current_errors)),
+        elbow_k,
+        initial_mean,
+        initial_max,
+        initial_colors,
+    )
