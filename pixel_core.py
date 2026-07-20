@@ -248,20 +248,29 @@ def _should_increase_k(errors, width, height):
 
 
 def _choose_elbow_k(ks, inertias):
-    if len(ks) < 3:
-        return ks[0]
-    xs = np.array(ks, dtype=float)
-    ys = np.array(inertias, dtype=float)
-    ys = (ys - ys.min()) / max(ys.max() - ys.min(), 1e-9)
-    xs = (xs - xs.min()) / max(xs.max() - xs.min(), 1e-9)
-    p1 = np.array([xs[0], ys[0]])
-    p2 = np.array([xs[-1], ys[-1]])
+    ks = np.array(ks)
+    inertias = np.array(inertias)
+    
+    # Первая и последняя точка
+    p1 = np.array([ks[0], inertias[0]])
+    p2 = np.array([ks[-1], inertias[-1]])
+    
+    # Вектор линии
     line = p2 - p1
     line_len = np.linalg.norm(line)
+    
     if line_len == 0:
         return ks[0]
-    line_dir = line / line_len
-    distances = np.abs(np.cross(line_dir, np.stack([xs, ys], axis=1) - p1))
+        
+    # Формула расстояния от точки (x0, y0) до линии, проходящей через (x1, y1) и (x2, y2)
+    # dist = |(y2-y1)x0 - (x2-x1)y0 + x2y1 - y2x1| / sqrt((y2-y1)^2 + (x2-x1)^2)
+    xs = ks
+    ys = inertias
+    
+    numerator = np.abs((p2[1] - p1[1]) * xs - (p2[0] - p1[0]) * ys + p2[0] * p1[1] - p2[1] * p1[0])
+    denominator = line_len
+    distances = numerator / denominator
+    
     return ks[int(np.argmax(distances))]
 
 
