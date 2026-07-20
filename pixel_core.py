@@ -204,9 +204,6 @@ def detect_grid_size(img_gray):
     step_y = choose_step(edge_step_y, corr_step_y, spec_step_y, orig_h)
     step = max(1.0, (step_x + step_y) / 2.0)
 
-    # Use axis-specific step estimates when converting to grid counts.
-    # Previously both axes used the averaged `step`, which produced
-    # systematic errors for non-square pixels or asymmetric artifacts.
     grid_w = max(1, int(round(orig_w / max(1e-9, step_x))))
     grid_h = max(1, int(round(orig_h / max(1e-9, step_y))))
 
@@ -224,15 +221,12 @@ def detect_grid_size(img_gray):
 
 
 def _largest_connected_region(mask):
-    # Use scipy.ndimage.label for fast connected-component labelling.
-    # Returns the size (in pixels) of the largest connected True-region.
     labeled, ncomponents = label(mask)
     if ncomponents == 0:
         return 0
     counts = np.bincount(labeled.ravel())
     if counts.size <= 1:
         return 0
-    # Skip background count at index 0
     return int(counts[1:].max())
 
 
@@ -248,25 +242,22 @@ def _should_increase_k(errors, width, height):
 
 
 def _choose_elbow_k(ks, inertias):
-    ks = np.array(ks)
-    inertias = np.array(inertias)
-    
-    # Первая и последняя точка линии
-    p1 = np.array([ks[0], inertias[0]])
-    p2 = np.array([ks[-1], inertias[-1]])
-    
-    # Вектор линии
+    if len(ks) < 3:
+        return ks[0]
+    xs = np.array(ks, dtype=float)
+    ys = np.array(inertias, dtype=float)
+    ys = (ys - ys.min()) / max(ys.max() - ys.min(), 1e-9)
+    xs = (xs - xs.min()) / max(xs.max() - xs.min(), 1e-9)
+    p1 = np.array([xs[0], ys[0]])
+    p2 = np.array([xs[-1], ys[-1]])
     line = p2 - p1
     line_len = np.linalg.norm(line)
-    
     if line_len == 0:
         return ks[0]
-        
-    # Расстояние от точки (xs, ys) до линии p1-p2
-    # Используем формулу перпендикуляра: |(y2-y1)x0 - (x2-x1)y0 + x2y1 - y2x1| / line_len
-    numerator = np.abs((p2[1] - p1[1]) * ks - (p2[0] - p1[0]) * inertias + p2[0] * p1[1] - p2[1] * p1[0])
-    distances = numerator / line_len
     
+    # Безопасный расчет расстояния в 2D без использования np.cross (совместимо с NumPy 2.x)
+    numerator = np.abs((p2[1] - p1[1]) * xs - (p2[0] - p1[0]) * ys + p2[0] * p1[1] - p2[1] * p1[0])
+    distances = numerator / line_len
     return ks[int(np.argmax(distances))]
 
 
@@ -334,35 +325,8 @@ def optimize_palette(img_rgb, target_w, target_h, max_k=32):
         initial_max,
         initial_colors,
     )
-def get_palette_stats(img_rgb):
-    """
-    Анализирует изображение и возвращает список словарей со статистикой цветов,
-    отсортированный по убыванию частоты.
-    """
-    img_np = np.array(img_rgb)
-    w, h, _ = img_np.shape
-    total_pixels = w * h
-    
-    # Получаем уникальные цвета и их количество
-    pixels = img_np.reshape(-1, 3)
-    colors, counts = np.unique(pixels, axis=0, return_counts=True)
-    
-    # Сортируем по убыванию количества
-    sort_indices = np.argsort(counts)[::-1]
-    sorted_colors = colors[sort_indices]
-    sorted_counts = counts[sort_indices]
-    
-    palette_data = []
-    for i, (color, count) in enumerate(zip(sorted_colors, sorted_counts)):
-        hex_code = '#{:02x}{:02x}{:02x}'.format(color[0], color[1], color[2])
-        palette_data.append({
-            "id": i + 1,
-            "rgb": tuple(color),
-            "hex": hex_code,
-            "percentage": (count / total_pixels) * 100
-        })
-    
-    return palette_data
+
+
 def get_palette_stats(img_rgb):
     """
     Анализирует изображение и возвращает список словарей со статистикой цветов,
