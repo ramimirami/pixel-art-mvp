@@ -42,4 +42,8 @@ python -m py_compile restorer_app.py
 - Интерфейс использует кастомные CSS-правила, внедряемые через `st.markdown(..., unsafe_allow_html=True)`.
 - Если появятся ошибки с ключами виджетов (duplicate key), убедитесь, что в коде каждому виджету назначен уникальный `key`.
 
+<<<<<<< HEAD
 Если хотите, могу также создать `requirements.txt` и короткий `CONTRIBUTING.md`.
+=======
+Если хотите, могу также создать `requirements.txt` и короткий `CONTRIBUTING.md`.
+>>>>>>> 7ea3a0b1e22b5e29f1c3e60cbf787e5db34f6eec
