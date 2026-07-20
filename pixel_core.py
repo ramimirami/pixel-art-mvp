@@ -251,7 +251,7 @@ def _choose_elbow_k(ks, inertias):
     ks = np.array(ks)
     inertias = np.array(inertias)
     
-    # Первая и последняя точка
+    # Первая и последняя точка линии
     p1 = np.array([ks[0], inertias[0]])
     p2 = np.array([ks[-1], inertias[-1]])
     
@@ -262,14 +262,10 @@ def _choose_elbow_k(ks, inertias):
     if line_len == 0:
         return ks[0]
         
-    # Формула расстояния от точки (x0, y0) до линии, проходящей через (x1, y1) и (x2, y2)
-    # dist = |(y2-y1)x0 - (x2-x1)y0 + x2y1 - y2x1| / sqrt((y2-y1)^2 + (x2-x1)^2)
-    xs = ks
-    ys = inertias
-    
-    numerator = np.abs((p2[1] - p1[1]) * xs - (p2[0] - p1[0]) * ys + p2[0] * p1[1] - p2[1] * p1[0])
-    denominator = line_len
-    distances = numerator / denominator
+    # Расстояние от точки (xs, ys) до линии p1-p2
+    # Используем формулу перпендикуляра: |(y2-y1)x0 - (x2-x1)y0 + x2y1 - y2x1| / line_len
+    numerator = np.abs((p2[1] - p1[1]) * ks - (p2[0] - p1[0]) * inertias + p2[0] * p1[1] - p2[1] * p1[0])
+    distances = numerator / line_len
     
     return ks[int(np.argmax(distances))]
 
