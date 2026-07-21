@@ -1,7 +1,9 @@
+import hashlib
+
 import streamlit as st
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from io import BytesIO
-from pixel_core import detect_grid_size, optimize_palette
+from pixel_core import detect_grid_size, optimize_palette, get_palette_stats
 
 # Конфигурация страницы
 st.set_page_config(
@@ -24,129 +26,12 @@ st.markdown("""
         padding-top: 2rem !important;
     }
     
-    .pixel-font {
-        font-family: 'Press Start 2P', monospace;
-        letter-spacing: 0.02em;
-        text-transform: uppercase;
-    }
-
     .retro-border {
         border: 2px solid #2e2e3a;
         box-shadow: 4px 4px 0 rgba(0,0,0,0.6);
     }
-    .retro-border-green {
-        border: 2px solid #7dffb3;
-        box-shadow: 4px 4px 0 #7dffb3;
-    }
-    .hard-shadow {
-        box-shadow: 4px 4px 0 rgba(0,0,0,0.8);
-    }
-    .hard-shadow-green {
-        box-shadow: 4px 4px 0 #7dffb3;
-    }
-    .hard-shadow-magenta {
-        box-shadow: 4px 4px 0 #ff5da2;
-    }
     .bg-surface-container {
         background-color: #0f1116;
-    }
-    .retro-button-base {
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        font-family: 'Press Start 2P', monospace !important;
-        text-transform: uppercase !important;
-        text-decoration: none !important;
-        cursor: default !important;
-        border: 1px solid #7fffd4 !important;
-        background-color: #0b0b0f !important;
-        color: #7fffd4 !important;
-        transition: all 0.2s ease !important;
-        height: 48px !important;
-        box-shadow: 4px 4px 0 #ff69b4 !important;
-        width: 100% !important;
-        padding: 0 16px !important;
-        gap: 8px !important;
-    }
-    .retro-button-base:hover {
-        background-color: #1a1a24 !important;
-    }
-    .retro-button-base:active {
-        transform: translate(4px, 4px) !important;
-        box-shadow: none !important;
-    }
-    .retro-button-base .material-symbols-outlined {
-        font-size: 20px !important;
-        margin-right: 8px !important;
-    }
-    .download-btn {
-        background-color: #7fffd4 !important;
-        color: #0b0b0f !important;
-        border-color: #0b0b0f !important;
-    }
-    .download-btn:hover {
-        background-color: #9fffff !important;
-    }
-    .info-panel {
-        background-color: #1a1a24 !important;
-        border: 1px solid #7fffd4 !important;
-        color: #7fffd4 !important;
-        font-family: 'Press Start 2P', monospace !important;
-        padding: 10px 16px !important;
-        height: 48px !important;
-        display: flex !important;
-        flex-direction: column !important;
-        justify-content: space-between !important;
-        box-shadow: 4px 4px 0 #ff69b4 !important;
-    }
-    .info-panel-label {
-        font-size: 8px !important;
-        color: #888 !important;
-        text-transform: uppercase !important;
-    }
-    .info-panel-value {
-        font-size: 16px !important;
-        color: #ffffff !important;
-    }
-    .action-button {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        gap: 12px !important;
-        width: 100% !important;
-        min-height: 58px !important;
-        background-color: #000000 !important;
-        color: #7dffb3 !important;
-        border: 2px solid #7dffb3 !important;
-        box-shadow: 4px 4px 0 #7dffb3 !important;
-        font-family: 'Press Start 2P', monospace !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.08em !important;
-        padding: 16px 20px !important;
-        text-decoration: none !important;
-    }
-    .action-button:hover {
-        transform: translateX(-2px, -2px) !important;
-        box-shadow: 6px 6px 0 #7dffb3 !important;
-    }
-    .action-button:active {
-        transform: translateX(2px, 2px) !important;
-    }
-    .action-button .action-label {
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: flex-start !important;
-        gap: 2px !important;
-    }
-    .action-button .action-label .small {
-        font-size: 8px !important;
-        color: #888 !important;
-        text-transform: uppercase !important;
-    }
-    .action-button .action-label .large {
-        font-size: 16px !important;
-        color: #ffffff !important;
-        line-height: 1 !important;
     }
     .output-controls {
         display: flex;
@@ -197,64 +82,6 @@ st.markdown("""
             max-width: 50%;
         }
     }
-    .button-group {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 16px;
-        width: 100%;
-    }
-    .button-group > div {
-        flex: 1 1 0;
-        min-width: 160px;
-    }
-    .button-cta {
-        background-color: #7dffb3 !important;
-        color: #000000 !important;
-        border: 2px solid #000000 !important;
-        box-shadow: 4px 4px 0 #ff5da2 !important;
-    }
-    .button-secondary {
-        background-color: #0f1116 !important;
-        color: #7dffb3 !important;
-        border: 2px solid #7dffb3 !important;
-        box-shadow: 4px 4px 0 rgba(0,0,0,0.6) !important;
-    }
-    .button-cta:hover:not(:disabled),
-    .button-secondary:hover:not(:disabled) {
-        transform: translateX(-2px) translateY(-2px) !important;
-        box-shadow: 6px 6px 0 #ff5da2 !important;
-    }
-    .button-cta:active:not(:disabled),
-    .button-secondary:active:not(:disabled) {
-        transform: translateX(2px) translateY(2px) !important;
-    }
-    .button-cta:disabled,
-    .button-secondary:disabled {
-        opacity: 0.7 !important;
-        cursor: not-allowed !important;
-    }
-    .button-cta:hover:not(:disabled) {
-        transform: translateX(-2px) translateY(-2px) !important;
-        box-shadow: 6px 6px 0 #ff5da2 !important;
-    }
-    .button-cta:active:not(:disabled) {
-        transform: translateX(2px) translateY(2px) !important;
-    }
-    .button-cta:disabled {
-        opacity: 0.7 !important;
-        cursor: not-allowed !important;
-    }
-    .checkerboard-bg {
-        background-image: 
-            linear-gradient(45deg, #1a1a22 25%, transparent 25%),
-            linear-gradient(-45deg, #1a1a22 25%, transparent 25%),
-            linear-gradient(45deg, transparent 75%, #1a1a22 75%),
-            linear-gradient(-45deg, transparent 75%, #1a1a22 75%);
-        background-size: 20px 20px;
-        background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-        background-color: #0b0b10;
-    }
-
     /* === ЗОНА ЗАГРУЗКИ === */
     div[data-testid="stFileUploader"] {
         background: transparent;
@@ -417,8 +244,8 @@ st.markdown("""
         cursor: not-allowed;
         transform: none !important;
         box-shadow: 2px 2px 0 #7dffb3 !important;
-    }
-
+    }        
+            
     /* Статусная строка */
     .status-line {
         display: flex;
@@ -442,36 +269,6 @@ st.markdown("""
         0% { opacity: 1; }
         50% { opacity: 0.2; }
         100% { opacity: 1; }
-    }
-
-    /* === КАРТОЧКИ МЕТРИК (HUD) === */
-    .metric-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-        gap: 8px;
-        margin: 20px 0;
-        width: 100%;
-        max-width: 896px;
-    }
-    .metric-item {
-        background: #0b0b10;
-        border: 2px solid #2e2e3a;
-        padding: 8px 12px;
-        box-shadow: 4px 4px 0 rgba(0,0,0,0.6);
-        text-align: center;
-    }
-    .metric-item .label {
-        font-family: 'Press Start 2P', monospace;
-        font-size: 8px;
-        color: #888;
-        text-transform: uppercase;
-        letter-spacing: 0.02em;
-        margin-bottom: 4px;
-    }
-    .metric-item .value {
-        font-family: 'Press Start 2P', monospace;
-        font-size: 14px;
-        color: #7dffb3;
     }
 
     /* Изображения */
@@ -543,7 +340,6 @@ st.markdown("""
     @media (max-width: 640px) {
         .hero-title { font-size: 16px; }
         .stButton > button { font-size: 12px !important; padding: 16px 20px !important; min-width: unset !important; }
-        .metric-grid { grid-template-columns: 1fr 1fr; }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -587,7 +383,7 @@ if uploaded_file is None:
     if 'last_file' in st.session_state:
         del st.session_state['last_file']
 else:
-    current_file_id = getattr(uploaded_file, "file_id", uploaded_file.name)
+    current_file_id = hashlib.md5(uploaded_file.getvalue()).hexdigest()
     if st.session_state.get('last_file') != current_file_id:
         st.session_state['last_file'] = current_file_id
         if 'restored' in st.session_state:
@@ -595,7 +391,11 @@ else:
 
 # === ОСНОВНОЙ ИНТЕРФЕЙС (при загруженном файле) ===
 if uploaded_file:
-    original = Image.open(uploaded_file).convert("RGB")
+    try:
+        original = Image.open(uploaded_file).convert("RGB")
+    except (UnidentifiedImageError, OSError):
+        st.error("Не удалось открыть изображение. Проверьте, что файл не повреждён и имеет формат PNG/JPG.")
+        st.stop()
     orig_w, orig_h = original.size
 
     st.markdown("<hr>", unsafe_allow_html=True)
@@ -607,39 +407,52 @@ if uploaded_file:
         st.markdown("<p style='font-family: \"Press Start 2P\", monospace; font-size: 12px; color: #888;'>ИСХОДНОЕ</p>", unsafe_allow_html=True)
         st.image(original, use_container_width=True)
         
-        # Блок ПАЛИТРЫ
+        # Блок ПАЛИТРЫ (Ретро-заголовок + Flexbox-галерея чипсов)
         if 'restored' in st.session_state:
-            st.markdown("### ПАЛИТРА")
-            from pixel_core import get_palette_stats
-            
+            st.markdown("<p style='font-family: \"Press Start 2P\", monospace; font-size: 12px; color: #888; margin-top: 24px; margin-bottom: 8px;'>ПАЛИТРА</p>", unsafe_allow_html=True)
             palette = get_palette_stats(st.session_state['restored'])
-            table_rows = ""
+            
+            # Генерация карточек-чипсов для палитры
+            chips_html = ""
             for item in palette:
-                color_box = (
-                    f'<span style="display:inline-block; width:24px; height:24px; background:{item["hex"]}; '
-                    'border:1px solid #fff; vertical-align:middle; margin-right:8px;"></span>'
-                )
-                table_rows += f"""
-                <tr>
-                    <td style="padding: 6px 8px; border: 1px solid #2e2e3a;">{item['id']}</td>
-                    <td style="padding: 6px 8px; border: 1px solid #2e2e3a;">{color_box}</td>
-                    <td style="padding: 6px 8px; border: 1px solid #2e2e3a;">{item['hex']}</td>
-                    <td style="padding: 6px 8px; border: 1px solid #2e2e3a;">{item['percentage']:.1f}%</td>
-                </tr>
+                chips_html += f"""
+                <div style="
+                    background: #0f1116;
+                    border: 2px solid #2e2e3a;
+                    padding: 8px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 6px;
+                    box-shadow: 2px 2px 0 rgba(0,0,0,0.6);
+                ">
+                    <div style="
+                        width: 100%;
+                        height: 32px;
+                        background-color: {item['hex']};
+                        border: 1px solid #ffffff;
+                    "></div>
+                    <div style="text-align: center;">
+                        <span style="font-family: 'Press Start 2P', monospace; font-size: 8px; color: #ffffff; display: block; margin-bottom: 2px;">{item['hex']}</span>
+                        <span style="font-family: 'Press Start 2P', monospace; font-size: 8px; color: #888; display: block;">{item['percentage']:.1f}%</span>
+                    </div>
+                </div>
                 """
-            st.write(
+            
+            # Контейнер-сетка для чипсов
+            st.markdown(
                 f"""
-                <table style="width:100%; border-collapse: collapse; font-size: 12px; color: white; margin-top: 12px;">
-                    <thead>
-                        <tr>
-                            <th style="text-align:left; padding: 8px; border: 1px solid #2e2e3a;">№</th>
-                            <th style="text-align:left; padding: 8px; border: 1px solid #2e2e3a;">Миниатюра</th>
-                            <th style="text-align:left; padding: 8px; border: 1px solid #2e2e3a;">HEX</th>
-                            <th style="text-align:left; padding: 8px; border: 1px solid #2e2e3a;">Покрытие</th>
-                        </tr>
-                    </thead>
-                    <tbody>{table_rows}</tbody>
-                </table>
+                <div style="
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+                    gap: 8px;
+                    margin-top: 12px;
+                    max-height: 320px;
+                    overflow-y: auto;
+                    padding-right: 4px;
+                ">
+                    {chips_html}
+                </div>
                 """,
                 unsafe_allow_html=True,
             )
