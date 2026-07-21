@@ -145,10 +145,13 @@ st.markdown("""
         z-index: 5;
     }
 
-    /* Скрываем стандартные тексты и кнопку */
+    /* Скрываем стандартные тексты, кнопки и иконки */
     div[data-testid="stFileUploader"] section span,
     div[data-testid="stFileUploader"] section small,
-    div[data-testid="stFileUploader"] section .st-dz-drag-hint {
+    div[data-testid="stFileUploader"] section .st-dz-drag-hint,
+    div[data-testid="stFileUploader"] button,
+    div[data-testid="stFileUploader"] .stFileChip,
+    div[data-testid="stFileUploader"] .stFileChip svg {
         display: none !important;
     }
 
